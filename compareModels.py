@@ -11,6 +11,7 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sb
 import matplotlib.pyplot as plt
 import numpy as np
+import clip
 
 
 # Get cpu, gpu or mps device for training.
@@ -31,17 +32,17 @@ modelName = "DNN_model.pth"
 if(os.path.isfile(modelDir+modelName)):
     model.load_state_dict(torch.load(modelDir+modelName))
     print("Loaded Model")
-print(model)
+#print(model)
 
 CNNModel = CNN().to(device)
 if(os.path.isfile(modelDir+modelName)):
     CNNModel.load_state_dict(torch.load(modelDir+"CNN_model.pth"))
     print("Loaded Model")
-print(CNNModel)
+#print(CNNModel)
 
 
 
-DataDir = "/home/albowler/projects/traffic_signs_project"
+DataDir = "/home/albowler/projects/old_traffic_signs_project"
 training_data = TrafficSignsDataset(os.path.join(DataDir, "TrainLabels.csv"), DataDir )
 
 test_data = TrafficSignsDataset(os.path.join(DataDir, "TestLabels.csv"), 
@@ -51,19 +52,57 @@ test_data = TrafficSignsDataset(os.path.join(DataDir, "TestLabels.csv"),
 batch_size = 64
 train_dataloader = DataLoader(training_data,  batch_size=batch_size)
 test_dataloader = DataLoader(test_data, batch_size=batch_size)
+loss_fn = nn.CrossEntropyLoss()
 
 
 
-encodingToLabels = ["20 MPH", "30 MPH", "50 MPH", "60 MPH", "70 MPH", "80 MPH", "End 80 MPH",
-                    "100 MPH", "120 MPH", "No Passing Zone", "No Passing Zone For Trucks", 
-                   "Priority Road Sign",  "Preference Road Sign", "Yield", "Stop", "No cars", 
-                   "No Trucks", "No Vehicles Any Kind", "Warning", "Left Curve", "Right Curve", 
-                   "Left then Right Turn", "Rough Road", "Slipper When Wet", "Narrow Road", 
-                   "Road Work Ahead", "Traffic Light Ahead", "Pedestrain", "Children Crossing",
-                   "Bike Crossing", "Snow Warning", "Deer Crossing", "No Speed Limit", "Traffic Must Turn Right",
-                   "Traffic Must Turn Left", "Traffic Must Go Straight", "Traffic Must Go Straight or Right",
-                   "Traffic Must Go Straight or Left", "Traffic Keep Right", "Traffic Keep Left", "Round a bout",
-                   "End of No Passing Zone", "End of No Truck Passing Zone"]
+
+encodingToLabels =  ["20 KPH German Traffic Sign", "30 KPH German Traffic Sign", "50 KPH German Traffic Sign", "60 KPH German Traffic Sign",
+                     "70 KPH German Traffic Sign", "80 KPH German Traffic Sign", "End 80 KPH German Traffic Sign",
+                    "100 KPH German Traffic Sign", "120 KPH German Traffic Sign", "No Passing Zone German Traffic Sign",
+                      "No Passing Zone For Trucks German Traffic Sign", "Priority German Traffic Sign",  "Preference German Traffic Sign",
+                    "Yield German Traffic Sign", "Stop German Traffic Sign", "No Cars Allowed German Traffic Sign", 
+                   "No Trucks Allowed German Traffic Sign", "No Vehicles Any Kind German Traffic Sign", "Warning German Traffic Sign",
+                     "Left Curve German Traffic Sign", "Right Curve German Traffic Sign", "Left then Right Turn German Traffic Sign",
+                       "Rough Road German Traffic Sign", "Slipper When Wet German Traffic Sign", "Narrow Road German Traffic Sign", 
+                   "Road Work Ahead German Traffic Sign", "Traffic Light Ahead German Traffic Sign", "Pedestrain German Traffic Sign",
+                     "Children Crossing German Traffic Sign", "Bike Crossing German Traffic Sign", "Snow Warning German Traffic Sign",
+                       "Deer Crossing German Traffic Sign", "No Speed Limit German Traffic Sign", "Traffic Must Turn Right German Traffic Sign",
+                   "Traffic Must Turn Left German Traffic Sign", "Traffic Must Go Straight German Traffic Sign", 
+                   "Traffic Must Go Straight or Right German Traffic Sign", "Traffic Must Go Straight or Left German Traffic Sign",
+                     "Traffic Keep Right German Traffic Sign", "Traffic Keep Left German Traffic Sign", "Round a bout German Traffic Sign",
+                   "End of No Passing Zone German Traffic Sign", "End of No Truck Passing Zone German Traffic Sign"]
+
+
+
+# ["20 KPH German Traffic Sign", "30 KPH German Traffic Sign", "50 KPH German Traffic Sign", "60 KPH German Traffic Sign",
+#                      "70 KPH German Traffic Sign", "80 KPH German Traffic Sign", "End 80 KPH German Traffic Sign",
+#                     "100 KPH German Traffic Sign", "120 KPH German Traffic Sign", "No Passing Zone German Traffic Sign",
+#                       "No Passing Zone For Trucks German Traffic Sign", "Priority German Traffic Sign",  "Preference German Traffic Sign",
+#                     "Yield German Traffic Sign", "Stop German Traffic Sign", "No Cars Allowed German Traffic Sign", 
+#                    "No Trucks Allowed German Traffic Sign", "No Vehicles Any Kind German Traffic Sign", "Warning German Traffic Sign",
+#                      "Left Curve German Traffic Sign", "Right Curve German Traffic Sign", "Left then Right Turn German Traffic Sign",
+#                        "Rough Road German Traffic Sign", "Slipper When Wet German Traffic Sign", "Narrow Road German Traffic Sign", 
+#                    "Road Work Ahead German Traffic Sign", "Traffic Light Ahead German Traffic Sign", "Pedestrain German Traffic Sign",
+#                      "Children Crossing German Traffic Sign", "Bike Crossing German Traffic Sign", "Snow Warning German Traffic Sign",
+#                        "Deer Crossing German Traffic Sign", "No Speed Limit German Traffic Sign", "Traffic Must Turn Right German Traffic Sign",
+#                    "Traffic Must Turn Left German Traffic Sign", "Traffic Must Go Straight German Traffic Sign", 
+#                    "Traffic Must Go Straight or Right German Traffic Sign", "Traffic Must Go Straight or Left German Traffic Sign",
+#                      "Traffic Keep Right German Traffic Sign", "Traffic Keep Left German Traffic Sign", "Round a bout German Traffic Sign",
+#                    "End of No Passing Zone German Traffic Sign", "End of No Truck Passing Zone German Traffic Sign"]
+# ["20 MPH", "30 MPH", "50 MPH", "60 MPH", "70 MPH", "80 MPH", "End 80 MPH",
+#                     "100 MPH", "120 MPH", "No Passing Zone", "No Passing Zone For Trucks", 
+#                    "Priority Road Sign",  "Preference Road Sign", "Yield", "Stop", "No cars", 
+#                    "No Trucks", "No Vehicles Any Kind", "Warning", "Left Curve", "Right Curve", 
+#                    "Left then Right Turn", "Rough Road", "Slipper When Wet", "Narrow Road", 
+#                    "Road Work Ahead", "Traffic Light Ahead", "Pedestrain", "Children Crossing",
+#                    "Bike Crossing", "Snow Warning", "Deer Crossing", "No Speed Limit", "Traffic Must Turn Right",
+#                    "Traffic Must Turn Left", "Traffic Must Go Straight", "Traffic Must Go Straight or Right",
+#                    "Traffic Must Go Straight or Left", "Traffic Keep Right", "Traffic Keep Left", "Round a bout",
+#                    "End of No Passing Zone", "End of No Truck Passing Zone"]
+
+
+#
 
 
 def test(dataloader, len_dataset, model, loss_fn, ret_y_pred = False):
@@ -87,8 +126,29 @@ def test(dataloader, len_dataset, model, loss_fn, ret_y_pred = False):
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     if(ret_y_pred):
         return y_pred
+    
+def CLIP_test():
+    clip_model, clip_preprocess = clip.load("ViT-B/32", device = device)
+    label_tokens = clip.tokenize(encodingToLabels).to(device)
+    test_csv = pd.read_csv(os.path.join(DataDir, 'TestLabels.csv'))
+    processed_images = []
 
-loss_fn = nn.CrossEntropyLoss()
+    for row in range(test_csv.shape[0]):
+        processed_images.append(clip_preprocess(Image.open(os.path.join(DataDir,test_csv.iloc[row,0]))))
+    y_true = torch.tensor(test_csv.iloc[:,1]).to(device)
+
+    processed_images = torch.stack(processed_images).to(device)
+    with torch.no_grad():
+        logits_per_image, logits_per_text = clip_model(processed_images, label_tokens)
+        y_pred = logits_per_image.argmax(dim = -1)
+        
+        # print(y_pred[:10])
+        # print(y_true[:10])
+        y_match = (y_pred == y_true).type(torch.float).mean()
+    print(f"CLIP model Test Error: \n Accuracy: {y_match.item():>0.1f}%\n")
+
+CLIP_test()
+
 
 print("DNN Train Dataset Accuracy: ")
 test(train_dataloader, len(training_data), model, loss_fn)
