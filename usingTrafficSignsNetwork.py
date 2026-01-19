@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 from NeuralNetworkClass import NeuralNetwork, CNN
@@ -33,42 +34,112 @@ if(os.path.isfile(modelDir+modelName)):
     print("Loaded Model")
 print(CNNModel)
 
-
-
-DataDir = "./testImgs"
-imgPath:str
-while(True):
-    print("Select an image from test dataset (ex. 00000.png 00252.png 01207.png  02405.png  03487.png  04625.png  05762.png  06940.png  08056.png\n  09258.png  10407.png  11522.png "+ 
-    "00002.png  01210.png  02407.png  03488.png  04626.png  05763.png  06942.png  08057.png  \n09261.png  10409.png  11523.png" + 
-    "00004.png  01211.png  02409.png  03489.png  04628.png  05764.png  06944.png  08060.png  \n09262.png  10412.png  11531.png)\n")
-
-    chosenImage = input()
-    print("Chosen Image is: ", chosenImage)
-
-    imgPath = os.path.join(DataDir, chosenImage)
-    if( not os.path.isfile(imgPath)):
-        print("Error test file does not exist.")
-    else:
-        break
-
-im = Image.open(imgPath)
-im.show()
-
-imgTensor = read_image(imgPath).type(torch.float32)
-imgTensor = torch.reshape(imgTensor, (1, *imgTensor.shape))
-imgTensor = imgTensor.to(device)
-#plt.imshow(imgTensor.permute(1,2,0))
-imgOneHot = model(imgTensor)
-CNNimgOneHot = CNNModel(imgTensor)
 encodingToLabels = ["20 MPH", "30 MPH", "50 MPH", "60 MPH", "70 MPH", "80 MPH", "End 80 MPH",
-                    "100 MPH", "120 MPH", "No Passing Zone", "No Passing Zone For Trucks", 
-                   "Priority Road Sign",  "Preference Road Sign", "Yield", "Stop", "No cars", 
-                   "No Trucks", "No Vehicles Any Kind", "Warning", "Left Curve", "Right Curve", 
-                   "Left then Right Turn", "Rough Road", "Slipper When Wet", "Narrow Road", 
+                    "100 MPH", "120 MPH", "No Passing Zone", "No Passing Zone For Trucks",
+                   "Priority Road Sign",  "Preference Road Sign", "Yield", "Stop", "No cars",
+                   "No Trucks", "No Vehicles Any Kind", "Warning", "Left Curve", "Right Curve",
+                   "Left then Right Turn", "Rough Road", "Slipper When Wet", "Narrow Road",
                    "Road Work Ahead", "Traffic Light Ahead", "Pedestrain", "Children Crossing",
                    "Bike Crossing", "Snow Warning", "Deer Crossing", "No Speed Limit", "Traffic Must Turn Right",
                    "Traffic Must Turn Left", "Traffic Must Go Straight", "Traffic Must Go Straight or Right",
                    "Traffic Must Go Straight or Left", "Traffic Keep Right", "Traffic Keep Left", "Round a bout",
                    "End of No Passing Zone", "End of No Truck Passing Zone"]
-print("DNN Predicted class: ", encodingToLabels[imgOneHot.argmax(1)[0].item()])
-print("CNN Predicted class: ", encodingToLabels[CNNimgOneHot.argmax(1)[0].item()])
+
+def predict_labels(img_tensor: torch.Tensor) -> tuple[str, str]:
+    with torch.no_grad():
+        img_one_hot = model(img_tensor)
+        cnn_img_one_hot = CNNModel(img_tensor)
+    dnn_label = encodingToLabels[img_one_hot.argmax(1)[0].item()]
+    cnn_label = encodingToLabels[cnn_img_one_hot.argmax(1)[0].item()]
+    return dnn_label, cnn_label
+
+def show_single_image_with_labels(img_path: str) -> None:
+    img_tensor = read_image(img_path).type(torch.float32)
+    img_tensor = torch.reshape(img_tensor, (1, *img_tensor.shape)).to(device)
+    dnn_label, cnn_label = predict_labels(img_tensor)
+
+    im = Image.open(img_path)
+    im_np = np.array(im)
+
+    plt.figure(figsize=(6, 6))
+    plt.imshow(im_np)
+    plt.axis("off")
+    plt.text(
+        8,
+        18,
+        f"DNN: {dnn_label}\nCNN: {cnn_label}",
+        color="white",
+        fontsize=10,
+        bbox=dict(facecolor="black", alpha=0.6, pad=4),
+    )
+    plt.show()
+
+def show_many_images_with_labels(img_paths: list[str]) -> None:
+    count = len(img_paths)
+    cols = int(np.ceil(np.sqrt(count)))
+    rows = int(np.ceil(count / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 3.2, rows * 3.2))
+    if rows == 1 and cols == 1:
+        axes = np.array([[axes]])
+    elif rows == 1:
+        axes = np.array([axes])
+    elif cols == 1:
+        axes = np.array([[ax] for ax in axes])
+
+    for idx, img_path in enumerate(img_paths):
+        r = idx // cols
+        c = idx % cols
+        ax = axes[r][c]
+        img_tensor = read_image(img_path).type(torch.float32)
+        img_tensor = torch.reshape(img_tensor, (1, *img_tensor.shape)).to(device)
+        dnn_label, cnn_label = predict_labels(img_tensor)
+        im_np = np.array(Image.open(img_path))
+        ax.imshow(im_np)
+        ax.set_title(f"DNN: {dnn_label}\nCNN: {cnn_label}", fontsize=8)
+        ax.axis("off")
+
+    for idx in range(count, rows * cols):
+        r = idx // cols
+        c = idx % cols
+        axes[r][c].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+parser = argparse.ArgumentParser(description="Run traffic sign model on test images.")
+parser.add_argument(
+    "--many",
+    nargs="?",
+    const=16,
+    type=int,
+    help="Show a grid of many images with predicted labels (default: 16).",
+)
+args = parser.parse_args()
+
+DataDir = "./testImgs"
+if args.many is not None:
+    available_imgs = sorted(
+        f for f in os.listdir(DataDir) if f.lower().endswith((".png", ".jpg", ".jpeg"))
+    )
+    if not available_imgs:
+        raise FileNotFoundError(f"No images found in {DataDir}")
+    count = min(args.many, len(available_imgs))
+    selected_paths = [os.path.join(DataDir, f) for f in available_imgs[:count]]
+    show_many_images_with_labels(selected_paths)
+else:
+    imgPath: str
+    while True:
+        print("Select an image from test dataset (ex. 00000.png 00252.png 01207.png  02405.png  03487.png  04625.png  05762.png  06940.png  08056.png\n  09258.png  10407.png  11522.png "+
+        "00002.png  01210.png  02407.png  03488.png  04626.png  05763.png  06942.png  08057.png  \n09261.png  10409.png  11523.png" +
+        "00004.png  01211.png  02409.png  03489.png  04628.png  05764.png  06944.png  08060.png  \n09262.png  10412.png  11531.png)\n")
+
+        chosenImage = input()
+        print("Chosen Image is: ", chosenImage)
+
+        imgPath = os.path.join(DataDir, chosenImage)
+        if not os.path.isfile(imgPath):
+            print("Error test file does not exist.")
+        else:
+            break
+
+    show_single_image_with_labels(imgPath)
